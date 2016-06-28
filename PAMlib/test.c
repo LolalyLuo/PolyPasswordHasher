@@ -32,6 +32,7 @@ int main(int argc, char *argv[]) {
 		retval = pam_authenticate(pamh, PAM_DISALLOW_NULL_AUTHTOK);
 	}
 	printf("6=================================================\n");
+	printf("app:!!!!!the err is: %d\n", retval);
 	if (retval == PAM_SUCCESS) {
 		printf("Authenticated\n");
 	} else if (retval == PAM_CRED_INSUFFICIENT) {
@@ -39,7 +40,7 @@ int main(int argc, char *argv[]) {
 	} else if (retval == PAM_USER_UNKNOWN) {
 		printf("The user does not exist\n");
 	} else {
-		printf("Fail to authenticate!\n");
+		printf("%s\n", pam_strerror(pamh, retval));
 	}	
 	
 
