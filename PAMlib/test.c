@@ -1,6 +1,10 @@
 #include <security/pam_appl.h>
+#define _GNU_SOURCE
 #include <security/pam_misc.h>
 #include <stdio.h>
+#include <unistd.h>
+#include <errno.h>
+#include <pwd.h>
 
 #define MAX_LENGTH_USERNAME  50
 const struct pam_conv conv = {
@@ -13,11 +17,33 @@ int main(int argc, char *argv[]) {
 	int retval;
 	char *user;
 	user = malloc(MAX_LENGTH_USERNAME);
+	struct passwd *user_info;
+	
+/*	user_info = getpwuid(getuid());
+	if (!user_info)  {
+		int errsv = errno;
+		printf("couldn't get user %s!\n", strerror(errsv));
+		return -1;
+	}
+
+
+	if (setresuid(0, 0, 0)) {
+		int errsv = errno;
+		printf("Couldn't set ourselves to root %s\n", strerror(errsv));
+		return -1;
+	}*/
 	printf("Username(app): ");
 	scanf("%s", user);
+	
+/*	printf("user is %s, user_info->pw_name is %s \n", user, user_info->pw_name);
 
+	if (strcmp(user_info->pw_name, user) && strcmp("root", user_info->pw_name)) {
+		printf("You can't change info for %s\n", user);
+		return -1;
+	}
+*/
 	printf("2=================================================\n");
-	printf("the user is: %s\n", user);
+	//printf("the user is: %s\n", user_info->pw_name);
 	retval = pam_start("PAM_PPH", user, &conv, &pamh);
 	printf("3=================================================\n");
 	// Are the credentials correct?
@@ -30,6 +56,7 @@ int main(int argc, char *argv[]) {
 	if (retval == PAM_SUCCESS) {
 		printf("Account is valid.\n");
 		retval = pam_authenticate(pamh, PAM_DISALLOW_NULL_AUTHTOK);
+		printf("app:!!!!!the err is: %d\n", retval);
 	}
 	printf("6=================================================\n");
 	printf("app:!!!!!the err is: %d\n", retval);
@@ -49,7 +76,7 @@ int main(int argc, char *argv[]) {
 	if (retval == PAM_SUCCESS) {
 		printf("Now you have to change your password\n");
 		do {
-            		retval = pam_chauthtok(pamh, 0);
+            		retval = pam_chauthtok(pamh, PAM_SILENT);
 			printf("error message: %s\n", pam_strerror(pamh, retval));
         	} while (retval == PAM_AUTHTOK_ERR);
 		

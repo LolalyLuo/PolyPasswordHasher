@@ -6,6 +6,7 @@
 #define PAM_SM_ACCOUNT
 #define PAM_SM_SESSION
 #include <syslog.h>
+#include <errno.h>
 #include <security/pam_appl.h>
 #include <security/pam_modules.h>
 #include <security/pam_ext.h>
@@ -48,19 +49,20 @@ PAM_EXTERN int pam_sm_authenticate( pam_handle_t *pamh, int flags,int argc, cons
 	retval = pam_get_user(pamh, &username, "Username(pam): ");	
 	openlog("PAM_PPH: ",LOG_NOWAIT, LOG_LOCAL1);
 	if (retval != PAM_SUCCESS) {
-		pam_syslog(pamh, LOG_ERR, "Error: can't access username. Lolaly \n");
+		pam_syslog(pamh, LOG_ERR, "PPH: can't access username. \n");
 		return retval;
 	}
 	//get password 
 	pam_err = pam_get_authtok(pamh, PAM_AUTHTOK, &password, "What is your password: ");
 	if (pam_err != PAM_SUCCESS){
-		pam_syslog(pamh, LOG_ERR, "Error: can't get password. Lolaly \n");
+
+		pam_syslog(pamh, LOG_ERR, "PPH: can't get password. \n");
 		return pam_err;
 	}
-	
+	pam_syslog(pamh, LOG_INFO, "PPH: authenticating, got username &password. \n");
 	//verify password
 	return verify_password (pamh, username, password);
-}
+}	
 
 
 
@@ -75,31 +77,13 @@ PAM_EXTERN int pam_sm_chauthtok(pam_handle_t *pamh, int flags, int argc, const c
 		pam_syslog(pamh, LOG_ERR, "PPH: Trouble getting username \n");
 		return retval;
 	}
-	retval = pam_get_authtok(pamh, PAM_AUTHTOK, &old_password, "What is your old password ");
-	if (retval != PAM_SUCCESS){
-		pam_syslog(pamh, LOG_ERR, "PPH: Can't get password \n");
-		return retval;
-	}
-	retval = verify_password (pamh, user, old_password);
-	if (retval != PAM_SUCCESS){
-		pam_syslog(pamh, LOG_ERR, "PPH: Can't authenticate the user to change password\n");
-		return retval;
-	}
-	//get new password
-	retval = pam_get_authtok(pamh, PAM_AUTHTOK, &password, "Give me a NEW password: ");
-	if (retval != PAM_SUCCESS){
-		pam_syslog(pamh, LOG_ERR, "PPH: Can't get password \n");
-		return retval;
-	}
-	retval = pam_get_authtok(pamh, PAM_AUTHTOK, &password_again, "Give me a NEW password again: ");
+	
+	retval = pam_get_authtok(pamh, PAM_AUTHTOK, &password, "NEW password: ");
 	if (retval != PAM_SUCCESS){
 		pam_syslog(pamh, LOG_ERR, "PPH: Can't get password \n");
 		return retval;
 	}
 	
-	if (password != password_again){
-		return PAM_AUTHTOK_ERR;
-	}
 	change_shadowfile(pamh, user, password);
 	pam_syslog(pamh, LOG_INFO, "PPH: changed password successfully\n");
 	return PAM_SUCCESS;
@@ -138,18 +122,27 @@ void change_shadowfile(pam_handle_t *pamh, const char *user, const char *passwor
 int verify_password (pam_handle_t *pamh, const char *username, const char *password ){
 	FILE *shadow;
 	shadow = fopen("/etc/shadow", "r");
+	if (!shadow) {
+		int errsv = errno;
+		pam_syslog(pamh, LOG_ERR, "Can't open file! (%s)", strerror(errsv));
+		return PAM_AUTH_ERR;
+	}
 	char buffer[4096];
 	int retval = PAM_USER_UNKNOWN;
+	pam_syslog(pamh, LOG_INFO, "Opened file. \n");
 	while(fgets(buffer, sizeof buffer, shadow) != NULL)  {
 		if(strncmp(buffer, username, strlen(username)) == 0) {
+			pam_syslog(pamh, LOG_INFO, "Found user. \n");
 			const char s[2] = ":";
 			char *theUser = strtok(buffer, s);
 			char *sigRightPwd = strtok(NULL, s);
-			char sig[5], rightPwd[1024];
+			char sig[6], rightPwd[1024];
+			sig[5]='\0';
+			pam_syslog(pamh, LOG_INFO, "sig is: %s \n",sig);
 			strncpy(sig, sigRightPwd, 5);
 			if (strcmp("$PPH$", sig) != 0){
 				retval = PAM_CRED_INSUFFICIENT;
-				pam_syslog(pamh, LOG_ERR, "PPH: Not a PPH password, authentication failed! \n");
+				pam_syslog(pamh, LOG_ERR, "PPH: Not a PPH password, authentication failed! %s\n", sig);
 				break;
 			}
 			strcpy(rightPwd, sigRightPwd+5);
@@ -169,6 +162,7 @@ int verify_password (pam_handle_t *pamh, const char *username, const char *passw
 	if (retval == PAM_USER_UNKNOWN){
 		pam_syslog(pamh, LOG_ERR, "PPH: user does not exist, authentication failed! \n");
 	}
+	pam_syslog(pamh, LOG_ERR, "PPH: now return value is: %d \n", retval);
 	return retval;
 }
 
