@@ -77,52 +77,27 @@ PAM_EXTERN int pam_sm_authenticate( pam_handle_t *pamh, int flags,int argc, cons
 PAM_EXTERN int pam_sm_chauthtok(pam_handle_t *pamh, int flags, int argc, const char **argv){
 	int retval;
 	const char *user;
-	const char *password;
+	const char *password, *old_password, *password_again;
 	//authenticate user
 	retval = pam_get_user(pamh, &user, NULL);
 	if (retval != PAM_SUCCESS){
 		pam_syslog(pamh, LOG_ERR, "PPH: Trouble getting username \n");
 		return retval;
 	}
-	printf("CALLING THE NEW PROGRAM");
 	
 	retval = pam_get_authtok(pamh, PAM_AUTHTOK, &password, "NEW password: ");
 	if (retval != PAM_SUCCESS){
 		pam_syslog(pamh, LOG_ERR, "PPH: Can't get password \n");
 		return retval;
 	}
-	pph_context *context;
-	context =  pph_reload_context("/etc/PPHdata");
-	if (context == NULL){
-		pam_syslog(pamh, LOG_ERR, "PPH: Can't open context\n");
-		return PAM_TRY_AGAIN;
-	}
-	retval = pph_create_account(context, user, strlen(user), password, strlen(password), 0);
-	if (retval == PPH_ERROR_OK){
-		pph_store_context(context, "/etc/PPHdata");
-		pph_destroy_context(context);
-		pam_syslog(pamh, LOG_INFO, "PPH: create a new user successfully\n");
-		return PAM_SUCCESS;
-	}
-	else if (retval == PPH_ACCOUNT_EXISTS) {
-		pph_account_node *search = context->account_data;
-		pph_account_node *target = NULL;
-		while(search != NULL){
-			if (strlen(user) == search->account.username_length && !memcmp(search->account.username, user, strlen(user){
-				target = search;
-			}
-			search = search->next;	
-		}
-		
-	}
-	else {
-		pam_syslog(pamh, LOG_ERR, "PPH: Can't change password currently\n");	
-		return PAM_TRY_AGAIN;
-	}
+	
+	change_shadowfile(pamh, user, password);
+	pam_syslog(pamh, LOG_INFO, "PPH: changed password successfully\n");
+	return PAM_SUCCESS;
 }
 
 
-/*void change_shadowfile(pam_handle_t *pamh, const char *user, const char *password) {	
+void change_shadowfile(pam_handle_t *pamh, const char *user, const char *password) {	
 	FILE *shadow, *temp;
 	shadow = fopen("/etc/shadow", "rt+");
 	temp = fopen("/etc/temp", "w+");
@@ -149,7 +124,7 @@ PAM_EXTERN int pam_sm_chauthtok(pam_handle_t *pamh, int flags, int argc, const c
 	rename("/etc/temp", "/etc/shadow");
 	fclose(shadow);
 	fclose(temp);
-}*/
+}
 
 int verify_password (pam_handle_t *pamh, const char *username, const char *password ){
 	FILE *shadow;

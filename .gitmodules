@@ -1,0 +1,3 @@
+[submodule "PolyPasswordHasher-c"]
+	path = PolyPasswordHasher-c
+	url = http://github.com/PolyPasswordHasher/PolyPasswordHasher-c.git
